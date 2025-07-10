@@ -282,6 +282,7 @@ static void leave(City *city, Pop *pop, NeedType need) {
             break;
         }
     }
+    (void)removed_pop;
     assert(removed_pop);
 
     --place->used;
