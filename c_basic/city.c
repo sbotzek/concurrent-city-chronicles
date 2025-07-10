@@ -461,6 +461,9 @@ static void move_pops(City *city) {
     int next_used[CITY_WIDTH][CITY_HEIGHT];
     memset(next_used, 0, sizeof(next_used));
 
+    city->num_moved = 0;
+    city->num_wanted_move = 0;
+
     // Make sure each moving pop has a move path.
     //
     // We need to do this now for later steps because we prioritize
@@ -473,6 +476,8 @@ static void move_pops(City *city) {
             pop->move_path_idx = 0;
             assert(pop->move_path);
         }
+
+        ++city->num_wanted_move;
     }
 
     // Let's sanity check all moves we're going to try to make
@@ -552,7 +557,8 @@ static void move_pops(City *city) {
         if (!pop->move_to_place) continue;
 
         if (can_move[pop->id]) {
-            // move_pop(city, pop);
+            ++city->num_moved;
+
             Coord next = pop->move_path[pop->move_path_idx];
             pop->x = next.x;
             pop->y = next.y;
@@ -574,6 +580,7 @@ static void move_pops(City *city) {
                 assert(pop->move_path[pop->move_path_idx].x != -1);
                 assert(pop->move_path[pop->move_path_idx].y != -1);
             }
+
         } else {
             ++pop->metrics.ticks_move_blocked;
         }

@@ -18,7 +18,7 @@ int main() {
         int day = tick / TICKS_PER_DAY + 1;
         int day_tick = tick - (day - 1) * TICKS_PER_DAY;
 
-        printf("Day %d %d Tick %d Last Sleep %ld\n", day, day_tick, tick, last_sleep);
+        printf("Day %d %d Tick %d Last Sleep %ld, Last Moved %d/%d %d%%\n", day, day_tick, tick, last_sleep, city.num_moved, city.num_wanted_move, (city.num_wanted_move == 0 ? 100 : (city.num_moved * 100 / city.num_wanted_move)));
         city_draw(&city);
 
         gettimeofday(&start, NULL);

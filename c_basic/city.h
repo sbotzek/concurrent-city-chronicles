@@ -100,6 +100,8 @@ struct City {
     Tile tiles[CITY_WIDTH][CITY_HEIGHT];
     Place *places;
     Pop *pops;
+    int num_moved;
+    int num_wanted_move;
 };
 
 extern const char PLACE_CHARS[];
