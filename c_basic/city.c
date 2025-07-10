@@ -63,7 +63,7 @@ static void leave(City *city, Pop *pop, NeedType need);
 static void update_pop(City *city, Pop *pop, int tick);
 static void move_pops(City *city);
 static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]);
-static void handle_pop_need(City *city, Pop *pop, NeedType need);
+static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick);
 
 // Returns array of Coords, end value has x & y of -1
 static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2);
@@ -343,6 +343,7 @@ static void update_pop(City *city, Pop *pop, int tick) {
                 for (NeedType need = 0; need < NEED_COUNT; ++need) {
                     pop->metrics.ticks_needs_unmet[need] += pop->ticks_needed[need];
                     pop->ticks_needed[need] = 0;
+                    pop->next_tick_can_find_reservation[need] = 0;
                 }
 
                 pop->ticks_needed[NEED_SLEEP] += 8 * TICKS_PER_HOUR;
@@ -352,25 +353,25 @@ static void update_pop(City *city, Pop *pop, int tick) {
 
     // Sleep!
     if (pop->ticks_needed[NEED_SLEEP] > 0) {
-        handle_pop_need(city, pop, NEED_SLEEP);
+        handle_pop_need(city, pop, NEED_SLEEP, tick);
         return;
     }
 
     // Eat!
     if (pop->ticks_needed[NEED_FOOD] > 0) {
-        handle_pop_need(city, pop, NEED_FOOD);
+        handle_pop_need(city, pop, NEED_FOOD, tick);
         return;
     }
 
     // Work!
     if (pop->ticks_needed[NEED_WORK] > 0) {
-        handle_pop_need(city, pop, NEED_WORK);
+        handle_pop_need(city, pop, NEED_WORK, tick);
         return;
     }
 
     // Play!
     if (pop->ticks_needed[NEED_PLAY] > 0) {
-        handle_pop_need(city, pop, NEED_PLAY);
+        handle_pop_need(city, pop, NEED_PLAY, tick);
         return;
     }
 
@@ -378,7 +379,7 @@ static void update_pop(City *city, Pop *pop, int tick) {
     ++pop->metrics.ticks_idle;
 }
 
-static void handle_pop_need(City *city, Pop *pop, NeedType need) {
+static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
     if (pop->satisfying_need == need) {
         --pop->ticks_needed[need];
         ++pop->metrics.ticks_needs[need];
@@ -390,17 +391,24 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
             // Kinda a hack here.
             Place *place = need == NEED_WORK ? pop->job
                 : need == NEED_SLEEP ? pop->home
+                : tick < pop->next_tick_can_find_reservation[need] ? NULL
                 : find_reservation(city, need, pop->x, pop->y);
             if (!place) {
+                if (tick >= pop->next_tick_can_find_reservation[need]) {
+                    // Don't want to introduce randomness but don't want to use the same value every time, so use (pop->id + tick) to vary
+                    pop->next_tick_can_find_reservation[need] = tick + TICKS_PER_HOUR / 3 + (pop->id + tick) % (TICKS_PER_HOUR / 3);
+                }
+
                 if (pop->satisfying_need != NEED_NONE) {
-                    handle_pop_need(city, pop, pop->satisfying_need);
+                    handle_pop_need(city, pop, pop->satisfying_need, tick);
                 } else if (pop->move_for_need != NEED_NONE) {
-                    handle_pop_need(city, pop, pop->move_for_need);
+                    handle_pop_need(city, pop, pop->move_for_need, tick);
                 } else {
                     ++pop->metrics.ticks_needs_blocked[need];
                 }
                 return;
             }
+
 
             if (pop->in_place) {
                 leave(city, pop, pop->satisfying_need);
@@ -421,7 +429,7 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
             // A pop could be idle at the same location as the place
             if (pop->x == place->x && pop->y == place->y) {
                 enter(city, pop, place, need);
-                handle_pop_need(city, pop, need);
+                handle_pop_need(city, pop, need, tick);
             } else {
                 pop->move_to_place = place;
                 pop->move_for_need = need;

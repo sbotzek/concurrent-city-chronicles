@@ -70,6 +70,11 @@ struct Pop {
     // Ticks remaining to fulfill each need
     int ticks_needed[NEED_COUNT];
 
+    // Keep track of the next time we can try to find a reservation
+    // for the specific need.  This is so if we fail to find a reservation
+    // we don't spin forever.
+    int next_tick_can_find_reservation[NEED_COUNT];
+
     PopMetrics metrics;
 
     Pop *next_in_city;
