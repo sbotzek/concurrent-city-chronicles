@@ -8,6 +8,10 @@
 #define TICKS_PER_HOUR 100
 #define TICKS_PER_DAY  (24 * TICKS_PER_HOUR)
 
+#define TICK_HOUR(tick) ((tick / TICKS_PER_HOUR) % 24)
+#define TICK_HOUR_MINUTE(tick) (tick % TICKS_PER_HOUR * 60 / TICKS_PER_HOUR)
+
+
 typedef struct Pop Pop;
 typedef struct Tile Tile;
 typedef struct City City;

@@ -48,8 +48,6 @@ static FILE* log_file;
 static const int dx[4] = {  1, -1,  0,  0 };
 static const int dy[4] = {  0,  0,  1, -1 };
 
-#define TICK_HOUR(tick) ((tick / TICKS_PER_HOUR) % 24)
-
 const char PLACE_CHARS[] = { 'H', 'J', 'P', 'D' };
 
 static bool can_add_place(City *city, int cx, int cy);
