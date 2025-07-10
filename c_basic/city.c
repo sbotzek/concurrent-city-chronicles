@@ -62,7 +62,7 @@ static void leave(City *city, Pop *pop, NeedType need);
 
 static void update_pop(City *city, Pop *pop, int tick);
 static void move_pops(City *city);
-static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]);
+static void claim_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]);
 static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick);
 
 // Returns array of Coords, end value has x & y of -1
@@ -450,7 +450,7 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
     }
 }
 
-static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
+static void claim_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
     assert(!checked[pop->id]);
     assert(pop->move_to_place);
 
@@ -459,12 +459,12 @@ static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[C
     Coord next = pop->move_path[pop->move_path_idx];
     Pop *pop2 = find_pop_at(city, next.x, next.y);
     if (pop2 && !checked[pop2->id]) {
-        reserve_recursively(depth+1, city, pop2, next_used, can_move, checked);
+        claim_recursively(depth+1, city, pop2, next_used, can_move, checked);
     }
 
     if (next_used[next.x][next.y] >= city->tiles[next.x][next.y].capacity) {
         DEBUG_INDENT(depth);
-        DEBUG_LOG("reserve_recursively: cannot move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, pop->x, pop->y, next_used[pop->x][pop->y]);
+        DEBUG_LOG("claim_recursively: cannot move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, pop->x, pop->y, next_used[pop->x][pop->y]);
         DEBUG_FLUSH();
         ++next_used[pop->x][pop->y];
         assert(next_used[pop->x][pop->y] <= city->tiles[pop->x][pop->y].capacity);
@@ -472,7 +472,7 @@ static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[C
     }
 
     DEBUG_INDENT(depth);
-    DEBUG_LOG("reserve_recursively: can move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, next.x, next.y, next_used[next.x][next.y]);
+    DEBUG_LOG("claim_recursively: can move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, next.x, next.y, next_used[next.x][next.y]);
     ++next_used[next.x][next.y];
     can_move[pop->id] = true;
 }
@@ -518,7 +518,7 @@ static void move_pops(City *city) {
     }
     #endif
 
-    // Reserve tiles for unmoving pops
+    // Claim tiles for unmoving pops
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (pop->move_to_place) continue;
 
@@ -560,12 +560,12 @@ static void move_pops(City *city) {
         }
     }
 
-    // Reserve other pops recursively
+    // Claim tiles for other pops recursively
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
         if (checked[pop->id]) continue;
 
-        reserve_recursively(0, city, pop, next_used, can_move, checked);
+        claim_recursively(0, city, pop, next_used, can_move, checked);
     }
 
 
