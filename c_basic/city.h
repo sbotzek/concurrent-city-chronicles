@@ -14,13 +14,13 @@ typedef struct City City;
 typedef struct Coord Coord;
 typedef struct Place Place;
 
-#define NEED_NONE -1
 typedef enum {
     NEED_FOOD,
     NEED_WORK,
     NEED_PLAY,
     NEED_SLEEP,
-    NEED_COUNT
+    NEED_COUNT,
+    NEED_NONE
 } NeedType;
 
 typedef enum {

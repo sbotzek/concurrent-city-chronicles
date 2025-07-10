@@ -388,6 +388,21 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
         }
     } else {
         if (pop->move_for_need != need) {
+            // Kinda a hack here.
+            Place *place = need == NEED_WORK ? pop->job
+                : need == NEED_SLEEP ? pop->home
+                : find_reservation(city, need, pop->x, pop->y);
+            if (!place) {
+                if (pop->satisfying_need != NEED_NONE) {
+                    handle_pop_need(city, pop, pop->satisfying_need);
+                } else if (pop->move_for_need != NEED_NONE) {
+                    handle_pop_need(city, pop, pop->move_for_need);
+                } else {
+                    ++pop->metrics.ticks_needs_blocked[need];
+                }
+                return;
+            }
+
             if (pop->in_place) {
                 leave(city, pop, pop->satisfying_need);
             }
@@ -401,15 +416,6 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
                     pop->move_path = NULL;
                     pop->move_path_idx = 0;
                 }
-            }
-
-            // Kinda a hack here.
-            Place *place = need == NEED_WORK ? pop->job
-                : need == NEED_SLEEP ? pop->home
-                : find_reservation(city, need, pop->x, pop->y);
-            if (!place) {
-                ++pop->metrics.ticks_needs_blocked[need];
-                return;
             }
 
             reserve(place, need);
