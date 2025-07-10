@@ -54,7 +54,7 @@ const char PLACE_CHARS[] = { 'H', 'J', 'P', 'D' };
 
 static bool can_add_place(City *city, int cx, int cy);
 
-static Place* find_reservation(City *city, NeedType need);
+static Place* find_reservation(City *city, NeedType need, int by_x, int by_y);
 static Pop* find_pop_at(City *city, int x, int y);
 static void reserve(Place *place, NeedType need);
 static void unreserve(Place *place, NeedType need);
@@ -88,7 +88,6 @@ void city_init(City *city) {
     printf("Creating places.\n");
     for (PlaceType place_type = 0; place_type < PLACE_COUNT; ++place_type) {
         int capacity_remaining = TOTAL_PLACE_CAPACITY[place_type];
-        // int num = NUM_PLACES[place_type];
 
         while (capacity_remaining > 0) {
             int capacity = CAPACITY_PER_PLACE[place_type];
@@ -140,12 +139,12 @@ void city_init(City *city) {
     // Find jobs and homes for pops
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         // Find homes for pops
-        pop->home = find_reservation(city, NEED_SLEEP);
+        pop->home = find_reservation(city, NEED_SLEEP, rand() % CITY_WIDTH, rand() % CITY_HEIGHT);
         assert(pop->home != NULL);
         reserve(pop->home, NEED_SLEEP);
 
         // Find jobs for pops
-        pop->job = find_reservation(city, NEED_WORK);
+        pop->job = find_reservation(city, NEED_WORK, pop->home->x, pop->home->y);
         assert(pop->job != NULL);
         reserve(pop->job, NEED_WORK);
     }
@@ -407,7 +406,7 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
             // Kinda a hack here.
             Place *place = need == NEED_WORK ? pop->job
                 : need == NEED_SLEEP ? pop->home
-                : find_reservation(city, need);
+                : find_reservation(city, need, pop->x, pop->y);
             if (!place) {
                 ++pop->metrics.ticks_needs_blocked[need];
                 return;
@@ -595,15 +594,22 @@ static void move_pops(City *city) {
 }
 
 
-static Place* find_reservation(City *city, NeedType need) {
+static Place* find_reservation(City *city, NeedType need, int by_x, int by_y) {
+    int best_distance = INT_MAX;
+    Place *best_place = NULL;
+
     for (Place *place = city->places; place; place = place->next_in_city) {
         if (place->needs_capacity[need] > place->needs_reserved[need] + place->needs_used[need]
             && place->capacity > place->reserved + place->used) {
-            return place;
+            int distance = abs(by_x - place->x) + abs(by_y - place->y);
+            if (distance < best_distance) {
+                best_place = place;
+                best_distance = distance;
+            }
         }
     }
 
-    return NULL;
+    return best_place;
 }
 
 static Pop* find_pop_at(City *city, int x, int y) {
