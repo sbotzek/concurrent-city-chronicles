@@ -5,7 +5,7 @@
 
 #define CITY_HEIGHT 50
 #define CITY_WIDTH 200
-#define TICKS_PER_HOUR 100
+#define TICKS_PER_HOUR 300
 #define TICKS_PER_DAY  (24 * TICKS_PER_HOUR)
 
 #define TICK_HOUR(tick) ((tick / TICKS_PER_HOUR) % 24)

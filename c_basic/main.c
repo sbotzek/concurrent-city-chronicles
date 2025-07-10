@@ -5,7 +5,7 @@
 #include "city.h"
 
 #define MAX_TICKS 10000
-#define TICK_USEC 20000
+#define TICK_USEC 6000
 
 int main() {
     City city;
