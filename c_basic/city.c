@@ -158,6 +158,8 @@ void city_init(City *city) {
         pop->x = pop->home->x;
         pop->y = pop->home->y;
         ++city->tiles[pop->x][pop->y].used;
+        reserve(pop->home, NEED_SLEEP);
+        enter(city, pop, pop->home, NEED_SLEEP);
     }
 }
 
@@ -327,6 +329,9 @@ static void update_pop(City *city, Pop *pop, int tick) {
     ++pop->metrics.ticks_total;
 
     // Handle need generation
+    if (tick == 0) {
+        pop->ticks_needed[NEED_SLEEP] += 7 * TICKS_PER_HOUR;
+    }
     if (tick % TICKS_PER_HOUR == 0) {
         switch (TICK_HOUR(tick)) {
             case 7:
