@@ -19,9 +19,9 @@ const int TOTAL_PLACE_CAPACITY[] = {
 
 const int CAPACITY_PER_PLACE[] = {
     4,
-    NUM_POPS / 2 / 2 / 2,
-    NUM_POPS / 4 / 4,
-    NUM_POPS / 4 / 4,
+    50,
+    10,
+    10
 };
 
 static FILE* log_file;
