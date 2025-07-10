@@ -4,7 +4,7 @@
 #include <sys/time.h>
 #include "city.h"
 
-#define MAX_TICKS 10000
+#define MAX_TICKS (TICKS_PER_DAY * 2)
 #define TICK_USEC 6000
 long tick_times[MAX_TICKS];
 
