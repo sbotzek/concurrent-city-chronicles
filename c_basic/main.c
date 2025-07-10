@@ -15,6 +15,8 @@ int main() {
     long last_sleep = 0;
     struct timeval start, end;
     for (int tick = 0; tick < MAX_TICKS; ++tick) {
+        printf("\033[H\033[J");
+
         int day = tick / TICKS_PER_DAY + 1;
         int day_tick = tick - (day - 1) * TICKS_PER_DAY;
 
@@ -31,8 +33,6 @@ int main() {
         last_sleep = sleep_for;
         if (sleep_for > 0)
             usleep(sleep_for);
-
-        printf("\033[H\033[J");
     }
     return 0;
 }
