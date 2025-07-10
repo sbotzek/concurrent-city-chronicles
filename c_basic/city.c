@@ -24,6 +24,26 @@ const int CAPACITY_PER_PLACE[] = {
     NUM_POPS / 4 / 4,
 };
 
+static FILE* log_file;
+
+#ifndef NDEBUG
+    #define DEBUG_LOG(fmt, ...) \
+        fprintf(log_file, fmt, ##__VA_ARGS__)
+    #define DEBUG_FLUSH() \
+        fflush(log_file)
+    #define DEBUG_INDENT(depth) \
+        for (int _i = 0; _i < depth; ++_i) \
+            fprintf(log_file, " ")
+#else
+    #define DEBUG_LOG(fmt, ...) \
+        do {} while (0)
+    #define DEBUG_FLUSH() \
+        do {} while (0)
+    #define DEBUG_INDENT(depth) \
+        do {} while (0)
+#endif
+
+
 // 4‐way offsets
 static const int dx[4] = {  1, -1,  0,  0 };
 static const int dy[4] = {  0,  0,  1, -1 };
@@ -35,6 +55,7 @@ const char PLACE_CHARS[] = { 'H', 'J', 'P', 'D' };
 static bool can_add_place(City *city, int cx, int cy);
 
 static Place* find_reservation(City *city, NeedType need);
+static Pop* find_pop_at(City *city, int x, int y);
 static void reserve(Place *place, NeedType need);
 static void unreserve(Place *place, NeedType need);
 
@@ -43,6 +64,7 @@ static void leave(City *city, Pop *pop, NeedType need);
 
 static void update_pop(City *city, Pop *pop, int tick);
 static void move_pops(City *city);
+static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]);
 static void handle_pop_need(City *city, Pop *pop, NeedType need);
 
 // Returns array of Coords, end value has x & y of -1
@@ -59,6 +81,8 @@ void city_init(City *city) {
             city->tiles[x][y].capacity = 1;
         }
     }
+
+    log_file = fopen("log.txt", "w");
 
     // Create places
     printf("Creating places.\n");
@@ -291,10 +315,12 @@ void city_draw(City *city) {
 }
 
 void city_update(City *city, int tick) {
+    DEBUG_LOG("Tick %d: Updating pops\n", tick);
     for (Pop *p = city->pops; p != NULL; p = p->next_in_city) {
         update_pop(city, p, tick);
     }
 
+    DEBUG_LOG("Tick %d: Moving pops\n", tick);
     move_pops(city);
 }
 
@@ -388,26 +414,57 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need) {
             }
 
             reserve(place, need);
-            pop->move_to_place = place;
-            pop->move_for_need = need;
+            // A pop could be idle at the same location as the place
+            if (pop->x == place->x && pop->y == place->y) {
+                enter(city, pop, place, need);
+                handle_pop_need(city, pop, need);
+            } else {
+                pop->move_to_place = place;
+                pop->move_for_need = need;
+            }
         }
     }
 }
 
-static void move_pops(City *city) {
-    int next_used[CITY_WIDTH][CITY_HEIGHT];
-    memset(next_used, 0, sizeof(next_used));
-    bool can_move[NUM_POPS];
-    memset(can_move, 0, sizeof(can_move));
+static void reserve_recursively(int depth, City *city, Pop *pop, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
+    assert(!checked[pop->id]);
+    assert(pop->move_to_place);
 
-    // Claim tiles for people not moving
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        if (pop->move_to_place) continue;
+    checked[pop->id] = true;
 
-        ++next_used[pop->x][pop->y];
+    Coord next = pop->move_path[pop->move_path_idx];
+    Pop *pop2 = find_pop_at(city, next.x, next.y);
+    if (pop2 && !checked[pop2->id]) {
+        reserve_recursively(depth+1, city, pop2, next_used, can_move, checked);
     }
 
-    // Claim tiles for people wanting to move.
+    if (next_used[next.x][next.y] >= city->tiles[next.x][next.y].capacity) {
+        DEBUG_INDENT(depth);
+        DEBUG_LOG("reserve_recursively: cannot move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, pop->x, pop->y, next_used[pop->x][pop->y]);
+        DEBUG_FLUSH();
+        ++next_used[pop->x][pop->y];
+        assert(next_used[pop->x][pop->y] <= city->tiles[pop->x][pop->y].capacity);
+        return;
+    }
+
+    DEBUG_INDENT(depth);
+    DEBUG_LOG("reserve_recursively: can move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, next.x, next.y, next_used[next.x][next.y]);
+    ++next_used[next.x][next.y];
+    can_move[pop->id] = true;
+}
+
+static void move_pops(City *city) {
+    bool checked[NUM_POPS];
+    memset(checked, 0, sizeof(checked));
+    bool can_move[NUM_POPS];
+    memset(can_move, 0, sizeof(can_move));
+    int next_used[CITY_WIDTH][CITY_HEIGHT];
+    memset(next_used, 0, sizeof(next_used));
+
+    // Make sure each moving pop has a move path.
+    //
+    // We need to do this now for later steps because we prioritize
+    // certain move paths.
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
 
@@ -416,53 +473,116 @@ static void move_pops(City *city) {
             pop->move_path_idx = 0;
             assert(pop->move_path);
         }
-
-        Coord next = pop->move_path[pop->move_path_idx];
-        if (next_used[next.x][next.y] < city->tiles[next.x][next.y].capacity) {
-            can_move[pop->id] = true;
-            ++next_used[next.x][next.y];
-        }
     }
 
-    // Move pops (or don't if they can't)
+    // Let's sanity check all moves we're going to try to make
+    #ifndef NDEBUG
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
 
-        if (!can_move[pop->id]) {
-            ++pop->metrics.ticks_move_blocked;
-            continue;
-        }
+        Coord next = pop->move_path[pop->move_path_idx];
 
-        --city->tiles[pop->x][pop->y].used;
+        assert(next.x >= 0 && next.x < CITY_WIDTH);
+        assert(next.y >= 0 && next.y < CITY_HEIGHT);
+
+        assert(next.x != pop->x || next.y != pop->y);
+    }
+    #endif
+
+    // Reserve tiles for unmoving pops
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (pop->move_to_place) continue;
+
+        ++next_used[pop->x][pop->y];
+        checked[pop->id] = true;
+    }
+
+    // Move pops wanting to swap tiles with each other.
+    //
+    // This guarantees conflicting congo lines will eventually clear out.
+    // Before, without this step, movement could deadlock.
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (!pop->move_to_place) continue;
+        if (checked[pop->id]) continue;
 
         Coord next = pop->move_path[pop->move_path_idx];
-        pop->x = next.x;
-        pop->y = next.y;
-        ++city->tiles[pop->x][pop->y].used;
-        ++pop->metrics.ticks_moved;
-        ++pop->move_path_idx;
+        for (Pop *pop2 = pop->next_in_city; pop2; pop2 = pop2->next_in_city) {
+            if (!pop2->move_to_place) continue;
+            if (checked[pop2->id]) continue;
 
-        if (pop->x == pop->move_to_place->x && pop->y == pop->move_to_place->y) {
-            assert(pop->move_path[pop->move_path_idx].x == -1);
-            assert(pop->move_path[pop->move_path_idx].y == -1);
+            Coord next2 = pop2->move_path[pop2->move_path_idx];
+            if (next2.x == pop->x && next2.y == pop->y
+                && next.x == pop2->x && next.y == pop2->y) {
+                // let the two pops move
+                ++next_used[next.x][next.y];
+                can_move[pop->id] = true;
+                checked[pop->id] = true;
+                assert(next_used[next.x][next.y] <= city->tiles[next.x][next.y].capacity);
+                DEBUG_LOG("move_pops swap: move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop->id, pop->x, pop->y, next.x, next.y, next.x, next.y, next_used[next.x][next.y]);
 
-            enter(city, pop, pop->move_to_place, pop->move_for_need);
-            pop->move_to_place = NULL;
-            pop->move_for_need = NEED_NONE;
+                ++next_used[next2.x][next2.y];
+                can_move[pop2->id] = true;
+                checked[pop2->id] = true;
+                assert(next_used[next2.x][next2.y] <= city->tiles[next2.x][next2.y].capacity);
+                DEBUG_LOG("move_pops swap: move for pop %d at %d,%d, into %d,%d reserving next_used for %d,%d which is at %d\n", pop2->id, pop2->x, pop2->y, next2.x, next2.y, next2.x, next2.y, next_used[next2.x][next2.y]);
 
-            free(pop->move_path);
-            pop->move_path = NULL;
-            pop->move_path_idx = 0;
-        } else {
-            assert(pop->move_path[pop->move_path_idx].x != -1);
-            assert(pop->move_path[pop->move_path_idx].y != -1);
+                break;
+            }
         }
     }
+
+    // Reserve other pops recursively
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (!pop->move_to_place) continue;
+        if (checked[pop->id]) continue;
+
+        reserve_recursively(0, city, pop, next_used, can_move, checked);
+    }
+
 
     // Sanity check our moves
     for (int x = 0; x < CITY_WIDTH; ++x) {
         for (int y = 0; y < CITY_HEIGHT; ++y) {
-            assert(city->tiles[x][y].used <= city->tiles[x][y].capacity);
+            assert(next_used[x][y] <= city->tiles[x][y].capacity);
+        }
+    }
+
+    // Handle moves
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (!pop->move_to_place) continue;
+
+        if (can_move[pop->id]) {
+            // move_pop(city, pop);
+            Coord next = pop->move_path[pop->move_path_idx];
+            pop->x = next.x;
+            pop->y = next.y;
+            ++pop->metrics.ticks_moved;
+            ++pop->move_path_idx;
+
+            if (pop->x == pop->move_to_place->x && pop->y == pop->move_to_place->y) {
+                assert(pop->move_path[pop->move_path_idx].x == -1);
+                assert(pop->move_path[pop->move_path_idx].y == -1);
+
+                enter(city, pop, pop->move_to_place, pop->move_for_need);
+                pop->move_to_place = NULL;
+                pop->move_for_need = NEED_NONE;
+
+                free(pop->move_path);
+                pop->move_path = NULL;
+                pop->move_path_idx = 0;
+            } else {
+                assert(pop->move_path[pop->move_path_idx].x != -1);
+                assert(pop->move_path[pop->move_path_idx].y != -1);
+            }
+        } else {
+            ++pop->metrics.ticks_move_blocked;
+        }
+    }
+
+    // Assign next_used
+    for (int x = 0; x < CITY_WIDTH; ++x) {
+        for (int y = 0; y < CITY_HEIGHT; ++y) {
+            city->tiles[x][y].used = next_used[x][y];
         }
     }
 }
@@ -479,8 +599,15 @@ static Place* find_reservation(City *city, NeedType need) {
     return NULL;
 }
 
-//static Coord[] calculate_path(City *city, int x1, int y1, int x2, int y2) {
-//}
+static Pop* find_pop_at(City *city, int x, int y) {
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (pop->x == x && pop->y == y) {
+            return pop;
+        }
+    }
+
+    return NULL;
+}
 
 static inline int in_bounds(int x, int y) {
     return x >= 0 && x < CITY_WIDTH && y >= 0 && y < CITY_HEIGHT;
