@@ -52,6 +52,9 @@ const char PLACE_CHARS[] = { 'H', 'J', 'P', 'D' };
 
 static bool can_add_place(City *city, int cx, int cy);
 
+static bool valid_xy(int x, int y);
+static bool valid_coord(Coord coord);
+
 static Place* find_reservation(City *city, NeedType need, int by_x, int by_y);
 static Pop* find_pop_at(City *city, int x, int y);
 static void reserve(Place *place, NeedType need);
@@ -171,7 +174,7 @@ static bool can_add_place(City *city, int cx, int cy) {
     // Ensure neighbors aren't having their only entrance blocked
     for (int i = 0; i < 4; i++) {
         int px = cx + dx[i], py = cy + dy[i];
-        if (px < 0 || px >= CITY_WIDTH || py < 0 || py >= CITY_HEIGHT)
+        if (!valid_xy(px, py))
             continue;
         Place *p = city->tiles[px][py].place;
         if (!p)
@@ -180,7 +183,7 @@ static bool can_add_place(City *city, int cx, int cy) {
         int free_nei = 0;
         for (int j = 0; j < 4; j++) {
             int nx = p->x + dx[j], ny = p->y + dy[j];
-            if (nx < 0 || nx >= CITY_WIDTH || ny < 0 || ny >= CITY_HEIGHT)
+            if (!valid_xy(nx, ny))
                 continue;
             if (nx == cx && ny == cy)
                 continue;   // skip our candidate
@@ -221,7 +224,7 @@ static bool can_add_place(City *city, int cx, int cy) {
         Coord c = queue[qh++];
         for (int i = 0; i < 4; i++) {
             int nx = c.x + dx[i], ny = c.y + dy[i];
-            if (nx < 0 || nx >= CITY_WIDTH || ny < 0 || ny >= CITY_HEIGHT)
+            if (!valid_xy(nx, ny))
                 continue;
             if (seen[nx][ny])
                 continue;
@@ -511,9 +514,7 @@ static void move_pops(City *city) {
 
         Coord next = pop->move_path[pop->move_path_idx];
 
-        assert(next.x >= 0 && next.x < CITY_WIDTH);
-        assert(next.y >= 0 && next.y < CITY_HEIGHT);
-
+        assert(valid_coord(next));
         assert(next.x != pop->x || next.y != pop->y);
     }
     #endif
@@ -647,10 +648,6 @@ static Pop* find_pop_at(City *city, int x, int y) {
     return NULL;
 }
 
-static inline int in_bounds(int x, int y) {
-    return x >= 0 && x < CITY_WIDTH && y >= 0 && y < CITY_HEIGHT;
-}
-
 #define MAX_QUEUE (CITY_WIDTH * CITY_HEIGHT)
 
 static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2) {
@@ -727,4 +724,14 @@ static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2) {
     path[length] = (Coord){ -1, -1 };
 
     return path;
+}
+
+
+static bool valid_xy(int x, int y) {
+    return x >= 0 && x < CITY_WIDTH
+        && y >= 0 && y < CITY_HEIGHT;
+}
+
+static bool valid_coord(Coord coord) {
+    return valid_xy(coord.x, coord.y);
 }
