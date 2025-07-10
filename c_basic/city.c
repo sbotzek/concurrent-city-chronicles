@@ -388,17 +388,24 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
         }
     } else {
         if (pop->move_for_need != need) {
-            // Kinda a hack here.
-            Place *place = need == NEED_WORK ? pop->job
-                : need == NEED_SLEEP ? pop->home
-                : tick < pop->next_tick_can_find_reservation[need] ? NULL
-                : find_reservation(city, need, pop->x, pop->y);
-            if (!place) {
-                if (tick >= pop->next_tick_can_find_reservation[need]) {
-                    // Don't want to introduce randomness but don't want to use the same value every time, so use (pop->id + tick) to vary
-                    pop->next_tick_can_find_reservation[need] = tick + TICKS_PER_HOUR / 3 + (pop->id + tick) % (TICKS_PER_HOUR / 3);
-                }
+            Place *place;
 
+            switch (need) {
+                // Kinda a hack here - NEED_WORK and NEED_SLEEP special cases.
+                case NEED_WORK: place = pop->job; break;
+                case NEED_SLEEP: place = pop->home; break;
+                default:
+                    if (tick >= pop->next_tick_can_find_reservation[need]) {
+                        place = find_reservation(city, need, pop->x, pop->y);
+                        if (!place) {
+                            // Don't want to introduce randomness but don't want to use the same value every time, so use (pop->id + tick) to vary
+                            pop->next_tick_can_find_reservation[need] = tick + TICKS_PER_HOUR / 3 + (pop->id + tick) % (TICKS_PER_HOUR / 3);
+                        }
+                    } else {
+                        place = NULL;
+                    }
+            }
+            if (!place) {
                 if (pop->satisfying_need != NEED_NONE) {
                     handle_pop_need(city, pop, pop->satisfying_need, tick);
                 } else if (pop->move_for_need != NEED_NONE) {
