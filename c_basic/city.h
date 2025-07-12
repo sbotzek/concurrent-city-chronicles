@@ -86,7 +86,6 @@ struct Place {
     int capacity;
     int reserved;
     int used;
-    int idle; // pops can stay idle at a place if the next need isn't ready yet
 
     Pop *pops;
 
