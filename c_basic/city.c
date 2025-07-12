@@ -57,11 +57,11 @@ static bool valid_coord(Coord coord);
 
 static Place* find_reservation(City *city, NeedType need, int by_x, int by_y);
 static Pop* find_pop_at(City *city, int x, int y);
-static void reserve(Place *place, NeedType need);
-static void unreserve(Place *place, NeedType need);
+static void reserve(Place *place);
+static void unreserve(Place *place);
 
-static void enter(City *city, Pop *pop, Place *place, NeedType need);
-static void leave(City *city, Pop *pop, NeedType need);
+static void enter(City *city, Pop *pop, Place *place);
+static void leave(City *city, Pop *pop);
 
 static void update_pop(City *city, Pop *pop, int tick);
 static void move_pops(City *city);
@@ -108,15 +108,18 @@ void city_init(City *city) {
                 .capacity = capacity,
                 .next_in_city = city->places,
             };
+
+            switch (place_type) {
+                case PLACE_JOB: place->satisfies = NEED_WORK; break;
+                case PLACE_HOME: place->satisfies = NEED_SLEEP; break;
+                case PLACE_DINER: place->satisfies = NEED_FOOD; break;
+                case PLACE_PARK: place->satisfies = NEED_PLAY; break;
+                case PLACE_COUNT: abort(); break;
+            }
+
             city->places = place;
             city->tiles[x][y].place = place;
             city->tiles[x][y].capacity = INT_MAX;
-
-            place->needs_capacity[NEED_FOOD] = place_type == PLACE_DINER ? capacity : 0;
-            place->needs_capacity[NEED_WORK] = place_type == PLACE_JOB ? capacity : 0;
-            place->needs_capacity[NEED_PLAY] = place_type == PLACE_PARK ? capacity : 0;
-            place->needs_capacity[NEED_SLEEP] = place_type == PLACE_HOME ? capacity : 0;
-            assert(NEED_COUNT == 4); // try to detect need enums changing
 
             capacity_remaining -= capacity;
         }
@@ -129,8 +132,6 @@ void city_init(City *city) {
 
         *pop = (Pop) {
             .id = i,
-            .satisfying_need = NEED_NONE,
-            .move_for_need = NEED_NONE,
             .next_in_city = city->pops,
         };
 
@@ -142,18 +143,18 @@ void city_init(City *city) {
         // Find homes for pops
         pop->home = find_reservation(city, NEED_SLEEP, rand() % CITY_WIDTH, rand() % CITY_HEIGHT);
         assert(pop->home != NULL);
-        reserve(pop->home, NEED_SLEEP);
+        reserve(pop->home);
 
         // Find jobs for pops
         pop->job = find_reservation(city, NEED_WORK, pop->home->x, pop->home->y);
         assert(pop->job != NULL);
-        reserve(pop->job, NEED_WORK);
+        reserve(pop->job);
     }
 
     // We reserved home/job, we need to unreserve them.
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        unreserve(pop->job, NEED_WORK);
-        unreserve(pop->home, NEED_SLEEP);
+        unreserve(pop->job);
+        unreserve(pop->home);
     }
 
     // Place pops in the map
@@ -161,8 +162,8 @@ void city_init(City *city) {
         pop->x = pop->home->x;
         pop->y = pop->home->y;
         ++city->tiles[pop->x][pop->y].used;
-        reserve(pop->home, NEED_SLEEP);
-        enter(city, pop, pop->home, NEED_SLEEP);
+        reserve(pop->home);
+        enter(city, pop, pop->home);
     }
 }
 
@@ -241,39 +242,32 @@ static bool can_add_place(City *city, int cx, int cy) {
     return (reached == total_free);
 }
 
-static void reserve(Place *place, NeedType need) {
+static void reserve(Place *place) {
     assert(place->capacity > place->reserved + place->used);
-    assert(place->needs_capacity[need] > place->needs_reserved[need] + place->needs_used[need]);
     ++place->reserved;
-    ++place->needs_reserved[need];
 }
 
-static void unreserve(Place *place, NeedType need) {
+static void unreserve(Place *place) {
     assert(place->reserved > 0);
-    assert(place->needs_capacity[need] > 0);
     --place->reserved;
-    --place->needs_reserved[need];
 }
 
-static void enter(City *city, Pop *pop, Place *place, NeedType need) {
+static void enter(City *city, Pop *pop, Place *place) {
     assert(pop->in_place == NULL);
 
     --city->tiles[pop->x][pop->y].used;
     pop->x = place->x;
     pop->y = place->y;
-    pop->satisfying_need = need;
 
     --place->reserved;
-    --place->needs_reserved[need];
     ++place->used;
-    ++place->needs_used[need];
 
     pop->in_place = place;
     pop->next_in_place = place->pops;
     place->pops = pop;
 }
 
-static void leave(City *city, Pop *pop, NeedType need) {
+static void leave(City *city, Pop *pop) {
     assert(pop->in_place != NULL);
 
     Place *place = pop->in_place;
@@ -291,12 +285,9 @@ static void leave(City *city, Pop *pop, NeedType need) {
     assert(removed_pop);
 
     --place->used;
-    --place->needs_used[need];
 
     assert(place->used >= 0);
-    assert(place->needs_used[need] >= 0);
 
-    pop->satisfying_need = NEED_NONE;
     pop->in_place = NULL;
     pop->x = place->x;
     pop->y = place->y;
@@ -388,14 +379,14 @@ static void update_pop(City *city, Pop *pop, int tick) {
 }
 
 static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
-    if (pop->satisfying_need == need) {
+    if (pop->in_place && pop->in_place->satisfies == need) {
         --pop->ticks_needed[need];
         ++pop->metrics.ticks_needs[need];
         if (pop->ticks_needed[need] == 0) {
-            leave(city, pop, need);
+            leave(city, pop);
         }
     } else {
-        if (pop->move_for_need != need) {
+        if (!pop->move_to_place || pop->move_to_place->satisfies != need) {
             Place *place;
 
             switch (need) {
@@ -414,10 +405,10 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
                     }
             }
             if (!place) {
-                if (pop->satisfying_need != NEED_NONE) {
-                    handle_pop_need(city, pop, pop->satisfying_need, tick);
-                } else if (pop->move_for_need != NEED_NONE) {
-                    handle_pop_need(city, pop, pop->move_for_need, tick);
+                if (pop->in_place && pop->ticks_needed[pop->in_place->satisfies] > 0) {
+                    handle_pop_need(city, pop, pop->in_place->satisfies, tick);
+                } else if (pop->move_to_place && pop->ticks_needed[pop->move_to_place->satisfies] > 0) {
+                    handle_pop_need(city, pop, pop->move_to_place->satisfies, tick);
                 } else {
                     ++pop->metrics.ticks_needs_blocked[need];
                 }
@@ -426,12 +417,11 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
 
 
             if (pop->in_place) {
-                leave(city, pop, pop->satisfying_need);
+                leave(city, pop);
             }
             if (pop->move_to_place) {
-                unreserve(pop->move_to_place, pop->move_for_need);
+                unreserve(pop->move_to_place);
                 pop->move_to_place = NULL;
-                pop->move_for_need = NEED_NONE;
 
                 if (pop->move_path) {
                     free(pop->move_path);
@@ -440,14 +430,13 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
                 }
             }
 
-            reserve(place, need);
+            reserve(place);
             // A pop could be idle at the same location as the place
             if (pop->x == place->x && pop->y == place->y) {
-                enter(city, pop, place, need);
+                enter(city, pop, place);
                 handle_pop_need(city, pop, need, tick);
             } else {
                 pop->move_to_place = place;
-                pop->move_for_need = need;
             }
         }
     }
@@ -594,9 +583,8 @@ static void move_pops(City *city) {
                 assert(pop->move_path[pop->move_path_idx].x == -1);
                 assert(pop->move_path[pop->move_path_idx].y == -1);
 
-                enter(city, pop, pop->move_to_place, pop->move_for_need);
+                enter(city, pop, pop->move_to_place);
                 pop->move_to_place = NULL;
-                pop->move_for_need = NEED_NONE;
 
                 free(pop->move_path);
                 pop->move_path = NULL;
@@ -625,8 +613,7 @@ static Place* find_reservation(City *city, NeedType need, int by_x, int by_y) {
     Place *best_place = NULL;
 
     for (Place *place = city->places; place; place = place->next_in_city) {
-        if (place->needs_capacity[need] > place->needs_reserved[need] + place->needs_used[need]
-            && place->capacity > place->reserved + place->used) {
+        if (place->satisfies == need && place->capacity > place->reserved + place->used) {
             int distance = abs(by_x - place->x) + abs(by_y - place->y);
             if (distance < best_distance) {
                 best_place = place;

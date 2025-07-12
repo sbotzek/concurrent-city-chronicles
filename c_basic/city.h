@@ -64,9 +64,6 @@ struct Pop {
     Place *job;
     Place *home;
 
-    NeedType satisfying_need;
-    NeedType move_for_need;
-
     // Ticks remaining to fulfill each need
     int ticks_needed[NEED_COUNT];
 
@@ -83,16 +80,13 @@ struct Pop {
 
 struct Place {
     PlaceType type;
+    NeedType satisfies;
     int x, y;
 
     int capacity;
     int reserved;
     int used;
     int idle; // pops can stay idle at a place if the next need isn't ready yet
-
-    int needs_capacity[NEED_COUNT];
-    int needs_reserved[NEED_COUNT];
-    int needs_used[NEED_COUNT];
 
     Pop *pops;
 
