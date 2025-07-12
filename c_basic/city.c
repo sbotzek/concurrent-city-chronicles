@@ -53,7 +53,6 @@ const char PLACE_CHARS[] = { 'H', 'J', 'P', 'D' };
 static bool can_add_place(City *city, int cx, int cy);
 
 static bool valid_xy(int x, int y);
-static bool valid_coord(Coord coord);
 
 static Place* find_reservation(City *city, NeedType need, int by_x, int by_y);
 static Pop* find_pop_at(City *city, int x, int y);
@@ -503,7 +502,7 @@ static void move_pops(City *city) {
 
         Coord next = pop->move_path[pop->move_path_idx];
 
-        assert(valid_coord(next));
+        assert(valid_xy(next.x, next.y));
         assert(next.x != pop->x || next.y != pop->y);
     }
     #endif
@@ -717,8 +716,4 @@ static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2) {
 static bool valid_xy(int x, int y) {
     return x >= 0 && x < CITY_WIDTH
         && y >= 0 && y < CITY_HEIGHT;
-}
-
-static bool valid_coord(Coord coord) {
-    return valid_xy(coord.x, coord.y);
 }
