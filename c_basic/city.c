@@ -295,6 +295,8 @@ static void leave(City *city, Pop *pop) {
 }
 
 void city_draw(City *city) {
+    char output[CITY_WIDTH+1];
+
     for (int y = 0; y < CITY_HEIGHT; ++y) {
         for (int x = 0; x < CITY_WIDTH; ++x) {
             char c = ' ';
@@ -302,9 +304,11 @@ void city_draw(City *city) {
                 c = PLACE_CHARS[city->tiles[x][y].place->type];
             else if (city->tiles[x][y].used > 0)
                 c = '.';
-            putchar(c);
+            output[x] = c;
         }
-        putchar('\n');
+
+        output[CITY_WIDTH] = '\0';
+        puts(output);
     }
 }
 
