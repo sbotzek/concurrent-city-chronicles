@@ -55,7 +55,6 @@ static bool can_add_place(City *city, int cx, int cy);
 static bool valid_xy(int x, int y);
 
 static Place* find_reservation(City *city, NeedType need, int by_x, int by_y);
-static Pop* find_pop_at(City *city, int x, int y);
 static void reserve(Place *place);
 static void unreserve(Place *place);
 
@@ -160,6 +159,8 @@ void city_init(City *city) {
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         pop->x = pop->home->x;
         pop->y = pop->home->y;
+        pop->next_in_tile = city->tiles[pop->x][pop->y].pops;
+        city->tiles[pop->x][pop->y].pops = pop;
         ++city->tiles[pop->x][pop->y].used;
         reserve(pop->home);
         enter(city, pop, pop->home);
@@ -253,10 +254,10 @@ static void unreserve(Place *place) {
 
 static void enter(City *city, Pop *pop, Place *place) {
     assert(pop->in_place == NULL);
+    assert(pop->x == place->x);
+    assert(pop->y == place->y);
 
     --city->tiles[pop->x][pop->y].used;
-    pop->x = place->x;
-    pop->y = place->y;
 
     --place->reserved;
     ++place->used;
@@ -270,6 +271,8 @@ static void leave(City *city, Pop *pop) {
     assert(pop->in_place != NULL);
 
     Place *place = pop->in_place;
+    assert(pop->x == place->x);
+    assert(pop->y == place->y);
 
     bool removed_pop = false;
     for (Pop** pp = &place->pops; *pp; pp = &(*pp)->next_in_place) {
@@ -288,8 +291,6 @@ static void leave(City *city, Pop *pop) {
     assert(place->used >= 0);
 
     pop->in_place = NULL;
-    pop->x = place->x;
-    pop->y = place->y;
     ++city->tiles[pop->x][pop->y].used;
 }
 
@@ -448,9 +449,14 @@ static void claim_recursively(int depth, City *city, Pop *pop, int next_used[CIT
     checked[pop->id] = true;
 
     Coord next = pop->move_path[pop->move_path_idx];
-    Pop *pop2 = find_pop_at(city, next.x, next.y);
-    if (pop2 && !checked[pop2->id]) {
-        claim_recursively(depth+1, city, pop2, next_used, can_move, checked);
+    Tile *next_tile = &city->tiles[next.x][next.y];
+    // we don't need to recurse across tiles with places since they have infinite capacity
+    if (!next_tile->place) {
+        for (Pop* pop2 = next_tile->pops; pop2; pop2 = pop2->next_in_tile) {
+            if (!checked[pop2->id]) {
+                claim_recursively(depth+1, city, pop2, next_used, can_move, checked);
+            }
+        }
     }
 
     if (next_used[next.x][next.y] >= city->tiles[next.x][next.y].capacity) {
@@ -573,8 +579,23 @@ static void move_pops(City *city) {
             ++city->num_moved;
 
             Coord next = pop->move_path[pop->move_path_idx];
+            bool removed_pop = false;
+            for (Pop **pp = &city->tiles[pop->x][pop->y].pops; *pp; pp = &(*pp)->next_in_tile) {
+                if (*pp == pop) {
+                    *pp = pop->next_in_tile;
+                    pop->next_in_tile = NULL;
+                    removed_pop = true;
+                    break;
+                }
+            }
+            (void)removed_pop;
+            assert(removed_pop);
+
             pop->x = next.x;
             pop->y = next.y;
+            pop->next_in_tile = city->tiles[pop->x][pop->y].pops;
+            city->tiles[pop->x][pop->y].pops = pop;
+
             ++pop->metrics.ticks_moved;
             ++pop->move_path_idx;
 
@@ -622,16 +643,6 @@ static Place* find_reservation(City *city, NeedType need, int by_x, int by_y) {
     }
 
     return best_place;
-}
-
-static Pop* find_pop_at(City *city, int x, int y) {
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        if (pop->x == x && pop->y == y) {
-            return pop;
-        }
-    }
-
-    return NULL;
 }
 
 #define MAX_QUEUE (CITY_WIDTH * CITY_HEIGHT)

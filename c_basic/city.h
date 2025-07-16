@@ -76,6 +76,7 @@ struct Pop {
 
     Pop *next_in_city;
     Pop *next_in_place;
+    Pop *next_in_tile;
 };
 
 struct Place {
@@ -94,6 +95,7 @@ struct Place {
 
 struct Tile {
     Place *place;
+    Pop *pops;
     int capacity;
     int used;
 };
