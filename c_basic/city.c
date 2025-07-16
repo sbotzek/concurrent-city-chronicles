@@ -530,7 +530,9 @@ static void move_pops(City *city) {
         if (checked[pop->id]) continue;
 
         Coord next = pop->move_path[pop->move_path_idx];
-        for (Pop *pop2 = pop->next_in_city; pop2; pop2 = pop2->next_in_city) {
+        if (city->tiles[next.x][next.y].place) continue; // tiles with places have gigantic capacity
+
+        for (Pop *pop2 = city->tiles[next.x][next.y].pops; pop2; pop2 = pop2->next_in_tile) {
             if (!pop2->move_to_place) continue;
             if (checked[pop2->id]) continue;
 
