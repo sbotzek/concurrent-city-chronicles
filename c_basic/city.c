@@ -437,6 +437,9 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
                 handle_pop_need(city, pop, need, tick);
             } else {
                 pop->move_to_place = place;
+                pop->move_path = calculate_path(city, pop->x, pop->y, pop->move_to_place->x, pop->move_to_place->y);
+                pop->move_path_idx = 0;
+                assert(pop->move_path);
             }
         }
     }
@@ -491,12 +494,6 @@ static void move_pops(City *city) {
     // certain move paths.
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
-
-        if (!pop->move_path) {
-            pop->move_path = calculate_path(city, pop->x, pop->y, pop->move_to_place->x, pop->move_to_place->y);
-            pop->move_path_idx = 0;
-            assert(pop->move_path);
-        }
 
         ++city->num_wanted_move;
     }
