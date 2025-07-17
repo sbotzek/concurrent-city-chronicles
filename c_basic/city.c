@@ -501,15 +501,6 @@ static void move_pops(City *city) {
     int next_used[CITY_WIDTH][CITY_HEIGHT];
     memset(next_used, 0, sizeof(next_used));
 
-    city->num_moved = 0;
-    city->num_wanted_move = 0;
-
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        if (!pop->move_to_place) continue;
-
-        ++city->num_wanted_move;
-    }
-
     // Claim tiles for unmoving pops
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (pop->move_to_place) continue;
@@ -572,9 +563,13 @@ static void move_pops(City *city) {
     #endif
 
     // Handle moves
+    city->num_moved = 0;
+    city->num_wanted_move = 0;
+
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
 
+        ++city->num_wanted_move;
         if (can_move[pop->id]) {
             ++city->num_moved;
 
