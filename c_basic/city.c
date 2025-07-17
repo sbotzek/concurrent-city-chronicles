@@ -481,38 +481,16 @@ static void claim_recursively(int depth, City *city, Pop *pop, int next_used[CIT
     can_move[pop->id] = true;
 }
 
-static void move_pops(City *city) {
-    // Let's sanity check all moves we're going to try to make
-    #ifndef NDEBUG
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        if (!pop->move_to_place) continue;
-
-        Coord next = pop->move_path[pop->move_path_idx];
-
-        assert(valid_xy(next.x, next.y));
-        assert(next.x != pop->x || next.y != pop->y);
-    }
-    #endif
-
-    bool checked[NUM_POPS];
-    memset(checked, 0, sizeof(checked));
-    bool can_move[NUM_POPS];
-    memset(can_move, 0, sizeof(can_move));
-    int next_used[CITY_WIDTH][CITY_HEIGHT];
-    memset(next_used, 0, sizeof(next_used));
-
-    // Claim tiles for unmoving pops
+static void claim_unmoving(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], bool checked[NUM_POPS]) {
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (pop->move_to_place) continue;
 
         ++next_used[pop->x][pop->y];
         checked[pop->id] = true;
     }
+}
 
-    // Move pops wanting to swap tiles with each other.
-    //
-    // This guarantees conflicting congo lines will eventually clear out.
-    // Before, without this step, movement could deadlock.
+static void claim_swapping_pops(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
         if (checked[pop->id]) continue;
@@ -544,25 +522,18 @@ static void move_pops(City *city) {
             }
         }
     }
+}
 
-    // Claim tiles for other pops recursively
+static void claim_unchecked_pops(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
         if (!pop->move_to_place) continue;
         if (checked[pop->id]) continue;
 
         claim_recursively(0, city, pop, next_used, can_move, checked);
     }
+}
 
-    // Sanity check our next_used
-    #ifndef NDEBUG
-    for (int x = 0; x < CITY_WIDTH; ++x) {
-        for (int y = 0; y < CITY_HEIGHT; ++y) {
-            assert(next_used[x][y] <= city->tiles[x][y].capacity);
-        }
-    }
-    #endif
-
-    // Handle moves
+static void move_pops_can_move(City *city, bool can_move[NUM_POPS]) {
     city->num_moved = 0;
     city->num_wanted_move = 0;
 
@@ -613,13 +584,56 @@ static void move_pops(City *city) {
             ++pop->metrics.ticks_move_blocked;
         }
     }
+}
 
-    // Assign next_used
+static void assign_next_used(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT]) {
     for (int x = 0; x < CITY_WIDTH; ++x) {
         for (int y = 0; y < CITY_HEIGHT; ++y) {
             city->tiles[x][y].used = next_used[x][y];
         }
     }
+}
+
+static void move_pops(City *city) {
+    // Let's sanity check all moves we're going to try to make
+    #ifndef NDEBUG
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (!pop->move_to_place) continue;
+
+        Coord next = pop->move_path[pop->move_path_idx];
+
+        assert(valid_xy(next.x, next.y));
+        assert(next.x != pop->x || next.y != pop->y);
+    }
+    #endif
+
+    bool checked[NUM_POPS];
+    memset(checked, 0, sizeof(checked));
+    bool can_move[NUM_POPS];
+    memset(can_move, 0, sizeof(can_move));
+    int next_used[CITY_WIDTH][CITY_HEIGHT];
+    memset(next_used, 0, sizeof(next_used));
+
+    claim_unmoving(city, next_used, checked);
+
+    // This guarantees conflicting congo lines will eventually clear out.
+    // Before, without this step, movement could deadlock.
+    claim_swapping_pops(city, next_used, can_move, checked);
+
+    claim_unchecked_pops(city, next_used, can_move, checked);
+
+    // Sanity check our next_used
+    #ifndef NDEBUG
+    for (int x = 0; x < CITY_WIDTH; ++x) {
+        for (int y = 0; y < CITY_HEIGHT; ++y) {
+            assert(next_used[x][y] <= city->tiles[x][y].capacity);
+        }
+    }
+    #endif
+
+    move_pops_can_move(city, can_move);
+
+    assign_next_used(city, next_used);
 }
 
 
