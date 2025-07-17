@@ -482,26 +482,6 @@ static void claim_recursively(int depth, City *city, Pop *pop, int next_used[CIT
 }
 
 static void move_pops(City *city) {
-    bool checked[NUM_POPS];
-    memset(checked, 0, sizeof(checked));
-    bool can_move[NUM_POPS];
-    memset(can_move, 0, sizeof(can_move));
-    int next_used[CITY_WIDTH][CITY_HEIGHT];
-    memset(next_used, 0, sizeof(next_used));
-
-    city->num_moved = 0;
-    city->num_wanted_move = 0;
-
-    // Make sure each moving pop has a move path.
-    //
-    // We need to do this now for later steps because we prioritize
-    // certain move paths.
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
-        if (!pop->move_to_place) continue;
-
-        ++city->num_wanted_move;
-    }
-
     // Let's sanity check all moves we're going to try to make
     #ifndef NDEBUG
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
@@ -513,6 +493,22 @@ static void move_pops(City *city) {
         assert(next.x != pop->x || next.y != pop->y);
     }
     #endif
+
+    bool checked[NUM_POPS];
+    memset(checked, 0, sizeof(checked));
+    bool can_move[NUM_POPS];
+    memset(can_move, 0, sizeof(can_move));
+    int next_used[CITY_WIDTH][CITY_HEIGHT];
+    memset(next_used, 0, sizeof(next_used));
+
+    city->num_moved = 0;
+    city->num_wanted_move = 0;
+
+    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+        if (!pop->move_to_place) continue;
+
+        ++city->num_wanted_move;
+    }
 
     // Claim tiles for unmoving pops
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
@@ -566,13 +562,14 @@ static void move_pops(City *city) {
         claim_recursively(0, city, pop, next_used, can_move, checked);
     }
 
-
-    // Sanity check our moves
+    // Sanity check our next_used
+    #ifndef NDEBUG
     for (int x = 0; x < CITY_WIDTH; ++x) {
         for (int y = 0; y < CITY_HEIGHT; ++y) {
             assert(next_used[x][y] <= city->tiles[x][y].capacity);
         }
     }
+    #endif
 
     // Handle moves
     for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
