@@ -650,54 +650,132 @@ static Place* find_reservation(City *city, NeedType need, int by_x, int by_y) {
 
 #define MAX_QUEUE (CITY_WIDTH * CITY_HEIGHT)
 
+typedef struct {
+    int x, y;
+    int f;    // f = g + h
+} Node;
+
+static inline int manhattan(int x1, int y1, int x2, int y2) {
+    return abs(x1 - x2) + abs(y1 - y2);
+}
+
+static void heap_swap(Node *a, Node *b) {
+    Node tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+static void sift_up(Node heap[], int i) {
+    while (i > 0) {
+        int p = (i - 1) / 2;
+
+        if (heap[i].f >= heap[p].f) {
+            break;
+        }
+
+        heap_swap(&heap[i], &heap[p]);
+        i = p;
+    }
+}
+
+static void sift_down(Node heap[], int size, int i) {
+    for (;;) {
+        int l = 2*i + 1;
+        int r = 2*i + 2;
+        int smallest = i;
+
+        if (l < size && heap[l].f < heap[smallest].f) {
+            smallest = l;
+        }
+        if (r < size && heap[r].f < heap[smallest].f) {
+            smallest = r;
+        }
+        if (smallest == i) {
+            break;
+        }
+
+        heap_swap(&heap[i], &heap[smallest]);
+        i = smallest;
+    }
+}
+
+static Node heap_pop(Node heap[], int *size) {
+    Node top = heap[0];
+
+    heap[0] = heap[--(*size)];
+    sift_down(heap, *size, 0);
+
+    return top;
+}
+
 static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2) {
     if (x1 == x2 && y1 == y2) {
-        Coord *path = malloc(sizeof(Coord) * 2);
+        Coord *path = malloc(sizeof(Coord)*2);
         path[0] = (Coord){ x2, y2 };
         path[1] = (Coord){ -1, -1 };
         return path;
     }
 
-    int visited[CITY_WIDTH][CITY_HEIGHT] = {0}; // [x][y]
-    Coord came_from[CITY_WIDTH][CITY_HEIGHT];   // [x][y]
+    int  g_score[CITY_WIDTH][CITY_HEIGHT];
+    Coord came_from[CITY_WIDTH][CITY_HEIGHT];
+    Node open_heap[MAX_QUEUE];
+    bool added[CITY_WIDTH][CITY_HEIGHT] = {{false}};
+    int  open_size = 0;
 
-    Coord queue[MAX_QUEUE];
-    int head = 0, tail = 0;
-
-    queue[tail++] = (Coord){ x1, y1 };
-    visited[x1][y1] = 1;
-
-    const int dx[4] = { 1, -1, 0, 0 };
-    const int dy[4] = { 0, 0, 1, -1 };
-
-    int found = 0;
-
-    while (head < tail) {
-        Coord cur = queue[head++];
-        for (int d = 0; d < 4; ++d) {
-            int nx = cur.x + dx[d];
-            int ny = cur.y + dy[d];
-
-            if (nx < 0 || ny < 0 || nx >= CITY_WIDTH || ny >= CITY_HEIGHT)
-                continue;
-            if (visited[nx][ny])
-                continue;
-
-            // Allow destination tile to have a place
-            if (city->tiles[nx][ny].place != NULL && !(nx == x2 && ny == y2))
-                continue;
-
-            visited[nx][ny] = 1;
-            came_from[nx][ny] = (Coord){ cur.x, cur.y };
-
-            if (nx == x2 && ny == y2) {
-                found = 1;
-                break;
-            }
-
-            queue[tail++] = (Coord){ nx, ny };
+    for (int x = 0; x < CITY_WIDTH;  x++) {
+        for (int y = 0; y < CITY_HEIGHT; y++) {
+            g_score[x][y] = INT_MAX;
         }
-        if (found) break;
+    }
+
+    // push start
+    g_score[x1][y1] = 0;
+    added[x1][y1] = true;
+    open_heap[open_size++] = (Node){
+        .x = x1,
+        .y = y1,
+        .f = manhattan(x1,y1, x2,y2)
+    };
+    sift_up(open_heap, open_size-1);
+
+    const int dx[4] = { 1, -1,  0,  0 };
+    const int dy[4] = { 0,  0,  1, -1 };
+    bool found = false;
+
+    while (open_size > 0) {
+        Node cur = heap_pop(open_heap, &open_size);
+
+        if (cur.x == x2 && cur.y == y2) {
+            found = true;
+            break;
+        }
+
+        for (int d = 0; d < 4; ++d) {
+            int next_x = cur.x + dx[d];
+            int next_y = cur.y + dy[d];
+
+            if (!valid_xy(next_x, next_y))
+                continue;
+            // consistent heuristic, so we don't need to re-open tiles we run across a 2nd time
+            if (added[next_x][next_y])
+                continue;
+            // Don't allow passing through places
+            if (city->tiles[next_x][next_y].place && !(next_x==x2 && next_y==y2))
+                continue;
+
+            added[next_x][next_y] = true;
+
+            came_from[next_x][next_y] = (Coord){ cur.x, cur.y };
+            g_score[next_x][next_y] = g_score[cur.x][cur.y] + 1;
+            int f = g_score[next_x][next_y] + manhattan(next_x,next_y, x2,y2);
+            open_heap[open_size++] = (Node){
+                .x = next_x,
+                .y = next_y,
+                .f = f
+            };
+
+            sift_up(open_heap, open_size-1);
+        }
     }
 
     if (!found) {
@@ -725,7 +803,6 @@ static Coord* calculate_path(City *city, int x1, int y1, int x2, int y2) {
 
     return path;
 }
-
 
 static bool valid_xy(int x, int y) {
     return x >= 0 && x < CITY_WIDTH
