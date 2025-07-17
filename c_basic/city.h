@@ -77,6 +77,7 @@ struct Pop {
     Pop *next_in_city;
     Pop *next_in_place;
     Pop *next_in_tile;
+    Pop *next_moving;
 };
 
 struct Place {
@@ -104,6 +105,7 @@ struct City {
     Tile tiles[CITY_WIDTH][CITY_HEIGHT];
     Place *places;
     Pop *pops;
+    Pop *moving;
     int num_moved;
     int num_wanted_move;
 };

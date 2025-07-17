@@ -423,7 +423,10 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
             if (pop->in_place) {
                 leave(city, pop);
             }
+
+            bool was_moving = false;
             if (pop->move_to_place) {
+                was_moving = true;
                 unreserve(pop->move_to_place);
                 pop->move_to_place = NULL;
 
@@ -443,6 +446,10 @@ static void handle_pop_need(City *city, Pop *pop, NeedType need, int tick) {
                 pop->move_to_place = place;
                 pop->move_path = calculate_path(city, pop->x, pop->y, pop->move_to_place->x, pop->move_to_place->y);
                 pop->move_path_idx = 0;
+                if (!was_moving) {
+                    pop->next_moving = city->moving;
+                    city->moving = pop;
+                }
                 assert(pop->move_path);
             }
         }
@@ -491,7 +498,7 @@ static void claim_unmoving(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], b
 }
 
 static void claim_swapping_pops(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+    for (Pop *pop = city->moving; pop; pop = pop->next_moving) {
         if (!pop->move_to_place) continue;
         if (checked[pop->id]) continue;
 
@@ -525,7 +532,7 @@ static void claim_swapping_pops(City *city, int next_used[CITY_WIDTH][CITY_HEIGH
 }
 
 static void claim_unchecked_pops(City *city, int next_used[CITY_WIDTH][CITY_HEIGHT], bool can_move[NUM_POPS], bool checked[NUM_POPS]) {
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+    for (Pop *pop = city->moving; pop; pop = pop->next_moving) {
         if (!pop->move_to_place) continue;
         if (checked[pop->id]) continue;
 
@@ -537,7 +544,8 @@ static void move_pops_can_move(City *city, bool can_move[NUM_POPS]) {
     city->num_moved = 0;
     city->num_wanted_move = 0;
 
-    for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+    for (Pop **pp1 = &city->moving; *pp1; ) {
+        Pop *pop = *pp1;
         if (!pop->move_to_place) continue;
 
         ++city->num_wanted_move;
@@ -575,13 +583,18 @@ static void move_pops_can_move(City *city, bool can_move[NUM_POPS]) {
                 free(pop->move_path);
                 pop->move_path = NULL;
                 pop->move_path_idx = 0;
+
+                *pp1 = pop->next_moving;
+                pop->next_moving = NULL;
             } else {
                 assert(pop->move_path[pop->move_path_idx].x != -1);
                 assert(pop->move_path[pop->move_path_idx].y != -1);
+                pp1 = &(*pp1)->next_moving;
             }
 
         } else {
             ++pop->metrics.ticks_move_blocked;
+            pp1 = &(*pp1)->next_moving;
         }
     }
 }
