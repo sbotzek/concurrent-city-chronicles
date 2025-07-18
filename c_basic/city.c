@@ -330,7 +330,8 @@ static void update_pop(City *city, Pop *pop, int tick) {
     if (tick == 0) {
         pop->ticks_needed[NEED_SLEEP] += 7 * TICKS_PER_HOUR;
     }
-    if (tick % TICKS_PER_HOUR == 0) {
+    // spread out need generation over the hour
+    if ((tick % TICKS_PER_HOUR) == (pop->id % TICKS_PER_HOUR)) {
         switch (TICK_HOUR(tick)) {
             case 7:
                 pop->ticks_needed[NEED_WORK] += 8 * TICKS_PER_HOUR;
