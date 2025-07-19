@@ -7,7 +7,8 @@
 
 #define MAX_TICKS (TICKS_PER_DAY * 2)
 #define TICK_USEC 6000
-long tick_times[MAX_TICKS];
+
+void display_performance_metrics(long tick_times[MAX_TICKS]);
 
 int cmp_long(const void *a, const void *b) {
     long va = *(const long *)a;
@@ -32,6 +33,7 @@ SimMode sim_mode(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     SimMode mode = sim_mode(argc, argv);
+    long tick_times[MAX_TICKS];
     City city;
 
     city_init(&city);
@@ -69,6 +71,12 @@ int main(int argc, char **argv) {
         }
     }
 
+    display_performance_metrics(tick_times);
+
+    return 0;
+}
+
+void display_performance_metrics(long tick_times[MAX_TICKS]) {
     qsort(tick_times, MAX_TICKS, sizeof(long), cmp_long);
     long p50 = tick_times[MAX_TICKS * 50 / 100];
     long p95 = tick_times[MAX_TICKS * 95 / 100];
@@ -83,6 +91,4 @@ int main(int argc, char **argv) {
 
     printf("Avg: %ld us | P50: %ld | P95: %ld | P99: %ld | Max: %ld, total %fs\n",
         avg, p50, p95, p99, max, sum / 1000 / 60);
-
-    return 0;
 }
