@@ -8,28 +8,12 @@
 #define MAX_TICKS (TICKS_PER_DAY * 2)
 #define TICK_USEC 6000
 
+// Prints performance related metrics to the screen.
 void display_performance_metrics(long tick_times[MAX_TICKS]);
-
-int cmp_long(const void *a, const void *b) {
-    long va = *(const long *)a;
-    long vb = *(const long *)b;
-    return (va > vb) - (va < vb); // avoids overflow
-}
-
-SimMode sim_mode(int argc, char **argv) {
-    if (argc == 1) {
-        return SIM_MODE_VISUAL;
-    }
-
-    if (strcmp(argv[1], "-bm") == 0) {
-        return SIM_MODE_BENCHMARK;
-    } else if (strcmp(argv[1], "-vm") == 0) {
-        return SIM_MODE_VISUAL;
-    } else {
-        fprintf(stderr, "Invalid arg %s. Must be: -bm or -vm\n", argv[1]);
-        exit(1);
-    }
-}
+// Used to compare two longs
+int cmp_long(const void *a, const void *b);
+// Figures out the sim mode from the arguments
+SimMode sim_mode(int argc, char **argv);
 
 int main(int argc, char **argv) {
     SimMode mode = sim_mode(argc, argv);
@@ -76,6 +60,21 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+SimMode sim_mode(int argc, char **argv) {
+    if (argc == 1) {
+        return SIM_MODE_VISUAL;
+    }
+
+    if (strcmp(argv[1], "-bm") == 0) {
+        return SIM_MODE_BENCHMARK;
+    } else if (strcmp(argv[1], "-vm") == 0) {
+        return SIM_MODE_VISUAL;
+    } else {
+        fprintf(stderr, "Invalid arg %s. Must be: -bm or -vm\n", argv[1]);
+        exit(1);
+    }
+}
+
 void display_performance_metrics(long tick_times[MAX_TICKS]) {
     qsort(tick_times, MAX_TICKS, sizeof(long), cmp_long);
     long p50 = tick_times[MAX_TICKS * 50 / 100];
@@ -91,4 +90,10 @@ void display_performance_metrics(long tick_times[MAX_TICKS]) {
 
     printf("Avg: %ld us | P50: %ld | P95: %ld | P99: %ld | Max: %ld, total %fs\n",
         avg, p50, p95, p99, max, sum / 1000 / 60);
+}
+
+int cmp_long(const void *a, const void *b) {
+    long va = *(const long *)a;
+    long vb = *(const long *)b;
+    return (va > vb) - (va < vb); // avoids overflow
 }
