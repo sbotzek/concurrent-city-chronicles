@@ -99,6 +99,7 @@ struct Tile {
     Pop *pops;
     int capacity;
     int used;
+    bool road;
 };
 
 struct City {
