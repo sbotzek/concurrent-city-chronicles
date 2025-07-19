@@ -1,5 +1,7 @@
 # C Basic
 
+This is a 'basic' version in C, not doing heavy optimizations or aiming for specific design techniques such as ECS and/or data oriented design.
+
 ## Building
 
 ```
