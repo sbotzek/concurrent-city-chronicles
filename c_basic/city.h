@@ -102,6 +102,11 @@ struct Tile {
     bool road;
 };
 
+typedef enum {
+    SIM_MODE_VISUAL,
+    SIM_MODE_BENCHMARK,
+} SimMode;
+
 struct City {
     Tile tiles[CITY_WIDTH][CITY_HEIGHT];
     Place *places;

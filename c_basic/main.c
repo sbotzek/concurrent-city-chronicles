@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include "city.h"
@@ -14,24 +15,45 @@ int cmp_long(const void *a, const void *b) {
     return (va > vb) - (va < vb); // avoids overflow
 }
 
-int main() {
+SimMode sim_mode(int argc, char **argv) {
+    if (argc == 1) {
+        return SIM_MODE_VISUAL;
+    }
+
+    if (strcmp(argv[1], "-bm") == 0) {
+        return SIM_MODE_BENCHMARK;
+    } else if (strcmp(argv[1], "-vm") == 0) {
+        return SIM_MODE_VISUAL;
+    } else {
+        fprintf(stderr, "Invalid arg %s. Must be: -bm or -vm\n", argv[1]);
+        exit(1);
+    }
+}
+
+int main(int argc, char **argv) {
+    SimMode mode = sim_mode(argc, argv);
     City city;
 
     city_init(&city);
 
     struct timeval start, end;
     for (int tick = 0; tick < MAX_TICKS; ++tick) {
-        printf("\033[H\033[J");
-
         int day = tick / TICKS_PER_DAY + 1;
         int hour = TICK_HOUR(tick);
         int minute = TICK_HOUR_MINUTE(tick);
         long tick_time = tick == 0 ? 0 : tick_times[tick-1];
 
-        printf("Day %d %2d:%02d, Tick %d, Tick Time %ld%s, Last Moved %d/%d %d%%\n", day, hour, minute, tick,
-               tick_time >= 1000 ? tick_time / 1000 : tick_time, tick_time >= 1000 ? "ms" : "us",
-               city.num_moved, city.num_wanted_move, (city.num_wanted_move == 0 ? 100 : (city.num_moved * 100 / city.num_wanted_move)));
-        city_draw(&city);
+        if (mode == SIM_MODE_VISUAL) {
+            printf("\033[H\033[J");
+            printf("Day %d %2d:%02d, Tick %d, Tick Time %ld%s, Last Moved %d/%d %d%%\n", day, hour, minute, tick,
+                tick_time >= 1000 ? tick_time / 1000 : tick_time, tick_time >= 1000 ? "ms" : "us",
+                city.num_moved, city.num_wanted_move, (city.num_wanted_move == 0 ? 100 : (city.num_moved * 100 / city.num_wanted_move)));
+            city_draw(&city);
+        } else if (mode == SIM_MODE_BENCHMARK) {
+            if (tick % 1000 == 0) {
+                printf("Tick %d\n", tick);
+            }
+        }
 
         gettimeofday(&start, NULL);
         city_update(&city, tick);
@@ -39,10 +61,12 @@ int main() {
 
         long elapsed = (end.tv_sec - start.tv_sec) * 1000000L
                      + (end.tv_usec - start.tv_usec);
-        long sleep_for = TICK_USEC - elapsed;
         tick_times[tick] = elapsed;
-        if (sleep_for > 0)
-            usleep(sleep_for);
+        if (mode == SIM_MODE_VISUAL) {
+            long sleep_for = TICK_USEC - elapsed;
+            if (sleep_for > 0)
+                usleep(sleep_for);
+        }
     }
 
     qsort(tick_times, MAX_TICKS, sizeof(long), cmp_long);
@@ -57,8 +81,8 @@ int main() {
     }
     long avg = sum / MAX_TICKS;
 
-    printf("Avg: %ld us | P50: %ld | P95: %ld | P99: %ld | Max: %ld\n",
-        avg, p50, p95, p99, max);
+    printf("Avg: %ld us | P50: %ld | P95: %ld | P99: %ld | Max: %ld, total %fs\n",
+        avg, p50, p95, p99, max, sum / 1000 / 60);
 
     return 0;
 }
