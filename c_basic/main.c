@@ -10,6 +10,10 @@
 
 // Prints performance related metrics to the screen.
 void display_performance_metrics(long tick_times[MAX_TICKS]);
+// Prints city metrics
+void display_city_metrics(City *city);
+// Formats data in pop_data with avg, p50, p95, etc
+const char* format_pop_metrics(long pop_data[NUM_POPS]);
 // Used to compare two longs
 int cmp_long(const void *a, const void *b);
 // Figures out the sim mode from the arguments
@@ -55,6 +59,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    display_city_metrics(&city);
     display_performance_metrics(tick_times);
 
     return 0;
@@ -90,6 +95,99 @@ void display_performance_metrics(long tick_times[MAX_TICKS]) {
 
     printf("Avg: %ld us | P50: %ld | P95: %ld | P99: %ld | Max: %ld, total %fs\n",
         avg, p50, p95, p99, max, sum / 1000 / 60);
+}
+
+void display_city_metrics(City *city) {
+    printf("Needs Stats\n");
+    {
+        long ticks_needs[NEED_COUNT][NUM_POPS];
+
+        for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+            for (NeedType need = 0; need < NEED_COUNT; ++need) {
+                ticks_needs[need][pop->id] = pop->metrics.ticks_needs[need];
+            }
+        }
+
+        printf("  Satisfying\n");
+        printf("    Sleep: %s\n", format_pop_metrics(ticks_needs[NEED_SLEEP]));
+        printf("    Work:  %s\n", format_pop_metrics(ticks_needs[NEED_WORK]));
+        printf("    Food:  %s\n", format_pop_metrics(ticks_needs[NEED_FOOD]));
+        printf("    Play:  %s\n", format_pop_metrics(ticks_needs[NEED_PLAY]));
+    }
+    {
+        long ticks_needs_blocked[NEED_COUNT][NUM_POPS];
+
+        for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+            for (NeedType need = 0; need < NEED_COUNT; ++need) {
+                ticks_needs_blocked[need][pop->id] = pop->metrics.ticks_needs_blocked[need];
+            }
+        }
+
+        printf("  Blocked\n");
+        printf("    Sleep: %s\n", format_pop_metrics(ticks_needs_blocked[NEED_SLEEP]));
+        printf("    Work:  %s\n", format_pop_metrics(ticks_needs_blocked[NEED_WORK]));
+        printf("    Food:  %s\n", format_pop_metrics(ticks_needs_blocked[NEED_FOOD]));
+        printf("    Play:  %s\n", format_pop_metrics(ticks_needs_blocked[NEED_PLAY]));
+    }
+    {
+        long ticks_needs_unmet[NEED_COUNT][NUM_POPS];
+
+        for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+            for (NeedType need = 0; need < NEED_COUNT; ++need) {
+                ticks_needs_unmet[need][pop->id] = pop->metrics.ticks_needs_unmet[need];
+            }
+        }
+
+        printf("  Unmet\n");
+        printf("    Sleep: %s\n", format_pop_metrics(ticks_needs_unmet[NEED_SLEEP]));
+        printf("    Work:  %s\n", format_pop_metrics(ticks_needs_unmet[NEED_WORK]));
+        printf("    Food:  %s\n", format_pop_metrics(ticks_needs_unmet[NEED_FOOD]));
+        printf("    Play:  %s\n", format_pop_metrics(ticks_needs_unmet[NEED_PLAY]));
+    }
+    {
+        long ticks_moved[NUM_POPS];
+        long ticks_move_blocked[NUM_POPS];
+
+        for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+            ticks_moved[pop->id] = pop->metrics.ticks_moved;
+            ticks_move_blocked[pop->id] = pop->metrics.ticks_move_blocked;
+        }
+
+        printf("Movement Stats\n");
+        printf("  Moved:        %s\n", format_pop_metrics(ticks_moved));
+        printf("  Move Blocked: %s\n", format_pop_metrics(ticks_move_blocked));
+    }
+    {
+        long ticks_idle[NUM_POPS];
+
+        for (Pop *pop = city->pops; pop; pop = pop->next_in_city) {
+            ticks_idle[pop->id] = pop->metrics.ticks_idle;
+        }
+
+        printf("Idle: %s\n", format_pop_metrics(ticks_idle));
+    }
+}
+
+const char* format_pop_metrics(long pop_data[NUM_POPS]) {
+    static char buf[1024];
+
+    qsort(pop_data, NUM_POPS, sizeof(long), cmp_long);
+    long min = pop_data[0];
+    long p50 = pop_data[NUM_POPS * 50 / 100];
+    long p95 = pop_data[NUM_POPS * 95 / 100];
+    long p99 = pop_data[NUM_POPS * 99 / 100];
+    long max = pop_data[NUM_POPS - 1];
+
+    double sum = 0;
+    for (int i = 0; i < NUM_POPS; ++i) {
+        sum += (double)pop_data[i];
+    }
+    long avg = sum / NUM_POPS;
+
+    sprintf(buf, "Avg: %ld | P50: %ld | P95: %ld | P99: %ld | Max: %ld, Min: %ld, Total: %f",
+        avg, p50, p95, p99, max, min, sum);
+
+    return buf;
 }
 
 int cmp_long(const void *a, const void *b) {

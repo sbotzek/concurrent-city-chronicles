@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#define NUM_POPS 5120
 #define CITY_HEIGHT 50
 #define CITY_WIDTH 200
 #define TICKS_PER_HOUR 300

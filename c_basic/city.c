@@ -7,7 +7,6 @@
 #include <assert.h>
 #include <limits.h>
 
-#define NUM_POPS 5120
 #define RAND_SEED 12345
 
 const int TOTAL_PLACE_CAPACITY[] = {
